@@ -6,7 +6,7 @@ embedded = true
 name = "SDSA Image Optimizer"
 
 [access_scopes]
-scopes = "read_products,write_products,write_metaobjects,write_metaobject_definitions"
+scopes = "read_products,write_products,write_metaobjects,write_metaobject_definitions,write_files"
 
 [product.metafields.app.demo_info]
 type = "single_line_text_field"
