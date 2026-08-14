@@ -80,15 +80,60 @@ export const action = async ({ request }) => {
 
   const formData = await request.formData();
 
-  const productId = formData.get("productId");
   const mediaId = formData.get("mediaId");
   const alt = formData.get("alt");
 
-  if (!productId || !mediaId || !alt) {
+  if (!mediaId || !alt) {
     return {
       success: false,
       error: "Informations manquantes.",
     };
+  }
+
+  const response = await admin.graphql(
+    `#graphql
+      mutation fileUpdate($files: [FileUpdateInput!]!) {
+        fileUpdate(files: $files) {
+          files {
+            id
+            alt
+            fileStatus
+          }
+          userErrors {
+            field
+            message
+            code
+          }
+        }
+      }
+    `,
+    {
+      variables: {
+        files: [
+          {
+            id: mediaId,
+            alt: alt,
+          },
+        ],
+      },
+    }
+  );
+
+  const data = await response.json();
+
+  const result = data?.data?.fileUpdate;
+
+  if (result?.userErrors?.length) {
+    return {
+      success: false,
+      error: result.userErrors[0].message,
+    };
+  }
+
+  return {
+    success: true,
+  };
+};
   }
 
   const response = await admin.graphql(
