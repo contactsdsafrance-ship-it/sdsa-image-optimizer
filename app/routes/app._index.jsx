@@ -1,4 +1,4 @@
-import { useLoaderData } from "react-router";
+import { useLoaderData, Form } from "react-router";
 import { authenticate } from "../shopify.server";
 
 export const loader = async ({ request }) => {
@@ -14,6 +14,7 @@ export const loader = async ({ request }) => {
             nodes {
               ... on MediaImage {
                 id
+                alt
                 image {
                   url
                   altText
@@ -42,15 +43,16 @@ export const loader = async ({ request }) => {
 
     const analyzedImages = images.map((media) => {
       const image = media.image;
+      const altText = media.alt || image?.altText || "";
 
-      if (!image?.altText) {
+      if (!altText) {
         imagesWithoutAlt++;
       }
 
       return {
         id: media.id,
         url: image?.url || "",
-        altText: image?.altText || "",
+        altText,
         width: image?.width || 0,
         height: image?.height || 0,
       };
@@ -73,18 +75,105 @@ export const loader = async ({ request }) => {
   };
 };
 
+export const action = async ({ request }) => {
+  const { admin } = await authenticate.admin(request);
+
+  const formData = await request.formData();
+
+  const productId = formData.get("productId");
+  const mediaId = formData.get("mediaId");
+  const alt = formData.get("alt");
+
+  if (!productId || !mediaId || !alt) {
+    return {
+      success: false,
+      error: "Informations manquantes.",
+    };
+  }
+
+  const response = await admin.graphql(
+    `#graphql
+      mutation UpdateImageAlt(
+        $productId: ID!
+        $mediaId: ID!
+        $alt: String!
+      ) {
+        productUpdateMedia(
+          productId: $productId
+          media: [
+            {
+              id: $mediaId
+              alt: $alt
+            }
+          ]
+        ) {
+          media {
+            id
+            alt
+          }
+          mediaUserErrors {
+            field
+            message
+          }
+        }
+      }
+    `,
+    {
+      variables: {
+        productId,
+        mediaId,
+        alt,
+      },
+    }
+  );
+
+  const data = await response.json();
+
+  const result = data?.data?.productUpdateMedia;
+
+  if (result?.mediaUserErrors?.length) {
+    return {
+      success: false,
+      error: result.mediaUserErrors[0].message,
+    };
+  }
+
+  return {
+    success: true,
+  };
+};
+
 export default function Index() {
   const { products, stats } = useLoaderData();
 
   return (
-    <div style={{ padding: "32px", maxWidth: "1400px", margin: "0 auto" }}>
-      <h1 style={{ fontSize: "28px", marginBottom: "10px" }}>
+    <div
+      style={{
+        padding: "32px",
+        maxWidth: "1400px",
+        margin: "0 auto",
+      }}
+    >
+      <h1
+        style={{
+          fontSize: "28px",
+          marginBottom: "10px",
+        }}
+      >
         SDSA Image Optimizer
       </h1>
 
-      <p style={{ fontSize: "16px", color: "#666", marginBottom: "30px" }}>
-        Analysez les images de vos produits, leurs dimensions et leurs textes ALT.
+      <p
+        style={{
+          fontSize: "16px",
+          color: "#666",
+          marginBottom: "30px",
+        }}
+      >
+        Analysez et optimisez les images de vos produits.
       </p>
+
+      {/* STATISTIQUES */}
 
       <div
         style={{
@@ -101,9 +190,15 @@ export default function Index() {
             padding: "24px",
           }}
         >
-          <div style={{ fontSize: "32px", fontWeight: "bold" }}>
+          <div
+            style={{
+              fontSize: "32px",
+              fontWeight: "bold",
+            }}
+          >
             {stats.products}
           </div>
+
           <div>Produits analysés</div>
         </div>
 
@@ -114,9 +209,15 @@ export default function Index() {
             padding: "24px",
           }}
         >
-          <div style={{ fontSize: "32px", fontWeight: "bold" }}>
+          <div
+            style={{
+              fontSize: "32px",
+              fontWeight: "bold",
+            }}
+          >
             {stats.images}
           </div>
+
           <div>Images</div>
         </div>
 
@@ -127,12 +228,20 @@ export default function Index() {
             padding: "24px",
           }}
         >
-          <div style={{ fontSize: "32px", fontWeight: "bold" }}>
+          <div
+            style={{
+              fontSize: "32px",
+              fontWeight: "bold",
+            }}
+          >
             {stats.imagesWithoutAlt}
           </div>
+
           <div>Images sans ALT</div>
         </div>
       </div>
+
+      {/* IMAGES */}
 
       <div
         style={{
@@ -165,7 +274,12 @@ export default function Index() {
                 borderBottom: "1px solid #eee",
               }}
             >
-              <h2 style={{ fontSize: "18px", marginBottom: "15px" }}>
+              <h2
+                style={{
+                  fontSize: "18px",
+                  marginBottom: "15px",
+                }}
+              >
                 {product.title}
               </h2>
 
@@ -205,20 +319,85 @@ export default function Index() {
                         />
                       )}
 
-                      <div style={{ marginTop: "12px", fontSize: "14px" }}>
+                      <div
+                        style={{
+                          marginTop: "12px",
+                          fontSize: "14px",
+                        }}
+                      >
                         <strong>Dimensions :</strong>{" "}
                         {image.width} × {image.height}px
                       </div>
+
+                      <Form method="post">
+                        <input
+                          type="hidden"
+                          name="productId"
+                          value={product.id}
+                        />
+
+                        <input
+                          type="hidden"
+                          name="mediaId"
+                          value={image.id}
+                        />
+
+                        <label
+                          style={{
+                            display: "block",
+                            marginTop: "12px",
+                            marginBottom: "6px",
+                            fontWeight: "bold",
+                            fontSize: "14px",
+                          }}
+                        >
+                          Texte ALT
+                        </label>
+
+                        <input
+                          type="text"
+                          name="alt"
+                          defaultValue={image.altText}
+                          placeholder={`Décrire ${product.title}`}
+                          style={{
+                            width: "100%",
+                            boxSizing: "border-box",
+                            padding: "9px",
+                            border: "1px solid #ccc",
+                            borderRadius: "6px",
+                          }}
+                        />
+
+                        <button
+                          type="submit"
+                          style={{
+                            marginTop: "10px",
+                            width: "100%",
+                            padding: "10px",
+                            border: "none",
+                            borderRadius: "6px",
+                            background: "#111",
+                            color: "#fff",
+                            cursor: "pointer",
+                            fontWeight: "bold",
+                          }}
+                        >
+                          Enregistrer l'ALT
+                        </button>
+                      </Form>
 
                       <div
                         style={{
                           marginTop: "8px",
                           fontSize: "14px",
-                          color: image.altText ? "#188038" : "#d93025",
+                          color: image.altText
+                            ? "#188038"
+                            : "#d93025",
                         }}
                       >
-                        <strong>ALT :</strong>{" "}
-                        {image.altText || "⚠️ ALT manquant"}
+                        {image.altText
+                          ? "✓ ALT renseigné"
+                          : "⚠️ ALT manquant"}
                       </div>
                     </div>
                   ))}
