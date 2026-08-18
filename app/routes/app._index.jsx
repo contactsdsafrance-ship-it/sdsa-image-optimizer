@@ -134,59 +134,6 @@ export const action = async ({ request }) => {
     success: true,
   };
 };
-  }
-
-  const response = await admin.graphql(
-    `#graphql
-      mutation UpdateImageAlt(
-        $productId: ID!
-        $mediaId: ID!
-        $alt: String!
-      ) {
-        productUpdateMedia(
-          productId: $productId
-          media: [
-            {
-              id: $mediaId
-              alt: $alt
-            }
-          ]
-        ) {
-          media {
-            id
-            alt
-          }
-          mediaUserErrors {
-            field
-            message
-          }
-        }
-      }
-    `,
-    {
-      variables: {
-        productId,
-        mediaId,
-        alt,
-      },
-    }
-  );
-
-  const data = await response.json();
-
-  const result = data?.data?.productUpdateMedia;
-
-  if (result?.mediaUserErrors?.length) {
-    return {
-      success: false,
-      error: result.mediaUserErrors[0].message,
-    };
-  }
-
-  return {
-    success: true,
-  };
-};
 
 export default function Index() {
   const { products, stats } = useLoaderData();
